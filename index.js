@@ -2,24 +2,30 @@
 // CONFIGURAÇÕES INICIAIS
 // ========================================
 
-// Carrega as variáveis do arquivo .env no computador.
-// No Render, utiliza as variáveis configuradas em Environment.
 require("dotenv").config();
 
-// Ferramentas do Node.js para trabalhar com arquivos e pastas.
 const fs = require("fs");
 const path = require("path");
-
-// Cria um pequeno servidor para o Render manter o bot online.
 const http = require("http");
 
-// Importações do Discord.js.
 const {
     Client,
     Collection,
     Events,
-    GatewayIntentBits
+    GatewayIntentBits,
+    MessageFlags
 } = require("discord.js");
+
+
+// ========================================
+// CANAL QUE DARÁ BAN AUTOMÁTICO
+// ========================================
+
+// Cole entre as aspas o ID do canal.
+// Exemplo:
+// const CANAL_DE_BANIMENTO = "123456789012345678";
+
+const CANAL_DE_BANIMENTO = "1531658073478008832";
 
 
 // ========================================
@@ -33,7 +39,7 @@ const server = http.createServer((request, response) => {
         "Content-Type": "text/plain"
     });
 
-    response.end("Bot de tickets está online!");
+    response.end("Bot está online!");
 });
 
 server.listen(PORT, () => {
@@ -42,28 +48,22 @@ server.listen(PORT, () => {
 
 
 // ========================================
-// CRIAR O CLIENTE DO DISCORD
+// CRIAR O BOT
 // ========================================
 
 const client = new Client({
     intents: [
-        GatewayIntentBits.Guilds
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages
     ]
 });
 
 
 // ========================================
-// COLEÇÃO DE COMANDOS
+// CARREGAR COMANDOS
 // ========================================
 
-// Aqui serão guardados os comandos encontrados
-// dentro da pasta commands.
 client.commands = new Collection();
-
-
-// ========================================
-// CARREGAR COMANDOS DA PASTA COMMANDS
-// ========================================
 
 const commandsPath = path.join(__dirname, "commands");
 
@@ -78,7 +78,6 @@ if (fs.existsSync(commandsPath)) {
         try {
             const command = require(filePath);
 
-            // Verifica se o comando possui as partes necessárias.
             if (
                 !command ||
                 !command.data ||
@@ -88,24 +87,22 @@ if (fs.existsSync(commandsPath)) {
                 continue;
             }
 
-            // Guarda o comando usando o nome dele.
             client.commands.set(command.data.name, command);
 
             console.log(`✅ Comando carregado: ${command.data.name}`);
-
         } catch (error) {
-            console.error(`❌ Erro ao carregar o comando ${file}:`, error);
+            console.error(
+                `❌ Erro ao carregar o comando ${file}:`,
+                error
+            );
         }
     }
 }
 
 
 // ========================================
-// CARREGAR OS BOTÕES
+// CARREGAR BOTÕES
 // ========================================
-
-// Cada arquivo possui o código que será executado
-// quando o respectivo botão for clicado.
 
 const abrirTicket = require("./buttons/abrirTicket.js");
 const fecharTicket = require("./buttons/fecharTicket.js");
@@ -113,8 +110,6 @@ const atendenteTicket = require("./buttons/atendenteTicket.js");
 const suporte = require("./buttons/suporte.js");
 const denuncia = require("./buttons/denuncia.js");
 
-
-// Relaciona o customId do botão com o arquivo responsável.
 const botoes = new Map();
 
 botoes.set("abrir_ticket", abrirTicket);
@@ -125,31 +120,29 @@ botoes.set("denuncia_ticket", denuncia);
 
 
 // ========================================
-// BOT PRONTO
+// BOT CONECTADO
 // ========================================
 
-// Este evento é executado uma única vez,
-// quando o bot consegue entrar no Discord.
 client.once(Events.ClientReady, readyClient => {
     console.log(`✅ Bot conectado como ${readyClient.user.tag}`);
-    console.log(`✅ Bot está em ${readyClient.guilds.cache.size} servidor(es)`);
+
+    console.log(
+        `✅ Bot está em ${readyClient.guilds.cache.size} servidor(es)`
+    );
+
+    console.log(
+        `🔨 Canal de banimento configurado: ${CANAL_DE_BANIMENTO}`
+    );
 });
 
 
 // ========================================
-// RECEBER COMANDOS E BOTÕES
+// COMANDOS E BOTÕES
 // ========================================
 
-// Este é o único lugar que recebe interações.
-// Não deve existir outro interactionCreate na pasta events.
 client.on(Events.InteractionCreate, async interaction => {
-
     try {
-
-        // ========================================
-        // COMANDOS DE BARRA
-        // ========================================
-
+        // Comandos de barra
         if (interaction.isChatInputCommand()) {
             const command = client.commands.get(
                 interaction.commandName
@@ -168,19 +161,15 @@ client.on(Events.InteractionCreate, async interaction => {
             );
 
             await command.execute(interaction);
-
             return;
         }
 
-
-        // ========================================
-        // BOTÕES
-        // ========================================
-
+        // Botões
         if (interaction.isButton()) {
-            console.log(`🔘 Botão clicado: ${interaction.customId}`);
+            console.log(
+                `🔘 Botão clicado: ${interaction.customId}`
+            );
 
-            // Procura o arquivo correspondente ao botão.
             const botao = botoes.get(interaction.customId);
 
             if (!botao) {
@@ -191,7 +180,6 @@ client.on(Events.InteractionCreate, async interaction => {
                 return;
             }
 
-            // Verifica se o arquivo possui a função execute.
             if (typeof botao.execute !== "function") {
                 console.log(
                     `❌ O botão ${interaction.customId} não possui execute()`
@@ -200,27 +188,22 @@ client.on(Events.InteractionCreate, async interaction => {
                 return;
             }
 
-            // Executa o arquivo do botão apenas uma vez.
             await botao.execute(interaction);
-
             return;
         }
-
     } catch (error) {
         console.error("❌ Erro ao executar interação:", error);
 
-        // Evita tentar responder duas vezes à mesma interação.
         try {
+            const resposta = {
+                content: "❌ Ocorreu um erro ao executar esta ação.",
+                flags: MessageFlags.Ephemeral
+            };
+
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({
-                    content: "❌ Ocorreu um erro ao executar esta ação.",
-                    ephemeral: true
-                });
+                await interaction.followUp(resposta);
             } else {
-                await interaction.reply({
-                    content: "❌ Ocorreu um erro ao executar esta ação.",
-                    ephemeral: true
-                });
+                await interaction.reply(resposta);
             }
         } catch (responseError) {
             console.error(
@@ -233,7 +216,76 @@ client.on(Events.InteractionCreate, async interaction => {
 
 
 // ========================================
-// TRATAMENTO DE ERROS GERAIS
+// BAN AUTOMÁTICO POR MENSAGEM
+// ========================================
+
+client.on(Events.MessageCreate, async message => {
+    try {
+        // Ignora mensagens enviadas no privado.
+        if (!message.guild) return;
+
+        // Ignora mensagens enviadas por bots.
+        if (message.author.bot) return;
+
+        // Ignora mensagens enviadas em outros canais.
+        if (message.channel.id !== CANAL_DE_BANIMENTO) return;
+
+        const membro = message.member;
+
+        if (!membro) {
+            console.log(
+                `⚠️ Não foi possível encontrar o membro ${message.author.tag}`
+            );
+
+            return;
+        }
+
+        // O dono do servidor não pode ser banido.
+        if (message.guild.ownerId === membro.id) {
+            console.log(
+                `⚠️ O dono do servidor escreveu no canal: ${membro.user.tag}`
+            );
+
+            return;
+        }
+
+        // Verifica se o Discord permite que o bot bana esse membro.
+        if (!membro.bannable) {
+            console.log(
+                `❌ Não consigo banir ${membro.user.tag}. ` +
+                "O cargo da pessoa pode estar acima do cargo do bot."
+            );
+
+            return;
+        }
+
+        const motivo =
+            `Enviou uma mensagem no canal proibido ` +
+            `#${message.channel.name}.`;
+
+        await membro.ban({
+            reason: motivo,
+            deleteMessageSeconds: 60 * 60
+        });
+
+        console.log(
+            `🔨 Usuário banido: ${membro.user.tag}`
+        );
+
+        console.log(
+            `📄 Motivo: ${motivo}`
+        );
+    } catch (error) {
+        console.error(
+            "❌ Erro ao tentar banir o usuário:",
+            error
+        );
+    }
+});
+
+
+// ========================================
+// TRATAMENTO DE ERROS
 // ========================================
 
 process.on("unhandledRejection", error => {
@@ -246,11 +298,22 @@ process.on("uncaughtException", error => {
 
 
 // ========================================
-// CONECTAR O BOT AO DISCORD
+// CONECTAR AO DISCORD
 // ========================================
 
 if (!process.env.TOKEN) {
     console.error("❌ A variável TOKEN não foi configurada.");
+    process.exit(1);
+}
+
+if (
+    !CANAL_DE_BANIMENTO ||
+    CANAL_DE_BANIMENTO === "COLE_O_ID_DO_CANAL_AQUI"
+) {
+    console.error(
+        "❌ Você ainda não colocou o ID do canal de banimento."
+    );
+
     process.exit(1);
 }
 
