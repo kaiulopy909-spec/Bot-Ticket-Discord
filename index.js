@@ -120,8 +120,8 @@ const botoes = new Map();
 botoes.set("abrir_ticket", abrirTicket);
 botoes.set("fechar_ticket", fecharTicket);
 botoes.set("atendente_ticket", atendenteTicket);
-botoes.set("suporte", suporte);
-botoes.set("denuncia", denuncia);
+botoes.set("suporte_ticket", suporte);
+botoes.set("denuncia_ticket", denuncia);
 
 
 // ========================================
