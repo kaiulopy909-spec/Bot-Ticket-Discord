@@ -10,14 +10,14 @@ const {
 
 
 // ========================================
-// CARGO QUE PODE ABRIR TICKET
+// CARGO BLOQUEADO DE ABRIR TICKETS
 // ========================================
 
-// Cole entre as aspas o ID do cargo permitido.
+// Cole entre as aspas o ID do cargo bloqueado.
 // Exemplo:
-// const CARGO_PERMITIDO_ID = "123456789012345678";
+// const CARGO_BLOQUEADO_ID = "123456789012345678";
 
-const CARGO_PERMITIDO_ID = "1531082774411350016";
+const CARGO_BLOQUEADO_ID = "1531432066783248434";
 
 
 module.exports = {
@@ -25,56 +25,70 @@ module.exports = {
 
     async execute(interaction) {
         try {
-            // Pega o membro que clicou no botão.
+            // ========================================
+            // PEGAR O MEMBRO QUE CLICOU
+            // ========================================
+
             const membro = interaction.member;
 
-            let possuiCargoPermitido = false;
+            let possuiCargoBloqueado = false;
 
-            // Forma normal quando o Discord retorna
-            // o membro completo com cache de cargos.
+
+            // ========================================
+            // VERIFICAR O CARGO
+            // ========================================
+
+            // Forma normal:
+            // interaction.member é um GuildMember completo.
             if (membro?.roles?.cache) {
-                possuiCargoPermitido =
+                possuiCargoBloqueado =
                     membro.roles.cache.has(
-                        CARGO_PERMITIDO_ID
+                        CARGO_BLOQUEADO_ID
                     );
             }
 
-            // Forma alternativa quando o Discord retorna
-            // apenas uma lista com IDs de cargos.
+            // Forma alternativa:
+            // o Discord pode retornar uma lista de IDs.
             if (
                 Array.isArray(membro?.roles) &&
                 membro.roles.includes(
-                    CARGO_PERMITIDO_ID
+                    CARGO_BLOQUEADO_ID
                 )
             ) {
-                possuiCargoPermitido = true;
+                possuiCargoBloqueado = true;
             }
 
-            // Se não tiver o cargo permitido,
-            // o bot bloqueia a abertura do ticket.
-            if (!possuiCargoPermitido) {
+
+            // ========================================
+            // BLOQUEAR QUEM POSSUI O CARGO
+            // ========================================
+
+            if (possuiCargoBloqueado) {
                 await interaction.reply({
                     content:
-                        "🚫 Você não possui o cargo necessário para abrir um ticket.",
+                        "🚫 Você não possui permissão para abrir tickets.",
 
                     flags: MessageFlags.Ephemeral
                 });
 
                 console.log(
-                    `🚫 Usuário sem cargo tentou abrir ticket: ` +
+                    `🚫 Usuário bloqueado tentou abrir ticket: ` +
                     `${interaction.user.tag}`
                 );
 
                 return;
             }
 
-            // Pega as configurações salvas do painel.
+
+            // ========================================
+            // ABRIR NORMALMENTE PARA OS OUTROS
+            // ========================================
+
             const configuracao =
                 pegarConfiguracao(
                     interaction.guild.id
                 );
 
-            // Cria a mensagem com as opções de ticket.
             const embed = new EmbedBuilder()
                 .setColor(configuracao.cor)
                 .setTitle(
@@ -94,7 +108,6 @@ module.exports = {
                 })
                 .setTimestamp();
 
-            // Mostra os botões de suporte e denúncia.
             await interaction.reply({
                 embeds: [embed],
 
@@ -111,16 +124,23 @@ module.exports = {
                 error
             );
 
-            if (
-                !interaction.replied &&
-                !interaction.deferred
-            ) {
-                await interaction.reply({
-                    content:
-                        "❌ Não foi possível abrir o painel de tickets.",
+            try {
+                if (
+                    !interaction.replied &&
+                    !interaction.deferred
+                ) {
+                    await interaction.reply({
+                        content:
+                            "❌ Não foi possível abrir o painel de tickets.",
 
-                    flags: MessageFlags.Ephemeral
-                });
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+            } catch (responseError) {
+                console.error(
+                    "❌ Não foi possível responder à interação:",
+                    responseError
+                );
             }
         }
     }
