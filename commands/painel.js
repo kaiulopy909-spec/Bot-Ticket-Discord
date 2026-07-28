@@ -23,7 +23,7 @@ module.exports = {
             )
 
             // COLE AQUI O LINK DIRETO DA SUA IMAGEM
-            .setImage("https://cdn.discordapp.com/attachments/123456789/987654321/imagem.png")
+            .setImage("https://cdn.discordapp.com/attachments/1481712099599188042/1531075213716885624/Novo_Projeto_1.png?ex=6a69dea8&is=6a688d28&hm=27a5769c0abb3b069a109e923edddaccc4779b80072d5854e0473535124215c8&")
 
             .setFooter({
                 text: "Sistema de Tickets"
