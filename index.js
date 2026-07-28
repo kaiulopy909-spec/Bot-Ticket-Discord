@@ -13,19 +13,27 @@ const {
     Collection,
     Events,
     GatewayIntentBits,
-    MessageFlags
+    MessageFlags,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    ActionRowBuilder
 } = require("discord.js");
 
+const {
+    pegarConfiguracao,
+    salvarConfiguracao,
+    criarEmbedTicket,
+    criarBotaoPrincipal
+} = require("./utils/painelConfig.js");
+
 
 // ========================================
-// CANAL QUE DARÁ BAN AUTOMÁTICO
+// CANAL DE BANIMENTO AUTOMÁTICO
 // ========================================
 
-// Cole entre as aspas o ID do canal.
-// Exemplo:
-// const CANAL_DE_BANIMENTO = "123456789012345678";
-
-const CANAL_DE_BANIMENTO = "1531658073478008832";
+const CANAL_DE_BANIMENTO =
+    "1531658073478008832";
 
 
 // ========================================
@@ -34,16 +42,20 @@ const CANAL_DE_BANIMENTO = "1531658073478008832";
 
 const PORT = process.env.PORT || 3000;
 
-const server = http.createServer((request, response) => {
-    response.writeHead(200, {
-        "Content-Type": "text/plain"
-    });
+const server = http.createServer(
+    (request, response) => {
+        response.writeHead(200, {
+            "Content-Type": "text/plain"
+        });
 
-    response.end("Bot está online!");
-});
+        response.end("Bot está online!");
+    }
+);
 
 server.listen(PORT, () => {
-    console.log(`🌐 Servidor HTTP iniciado na porta ${PORT}`);
+    console.log(
+        `🌐 Servidor HTTP iniciado na porta ${PORT}`
+    );
 });
 
 
@@ -65,7 +77,10 @@ const client = new Client({
 
 client.commands = new Collection();
 
-const commandsPath = path.join(__dirname, "commands");
+const commandsPath = path.join(
+    __dirname,
+    "commands"
+);
 
 if (fs.existsSync(commandsPath)) {
     const commandFiles = fs
@@ -73,7 +88,10 @@ if (fs.existsSync(commandsPath)) {
         .filter(file => file.endsWith(".js"));
 
     for (const file of commandFiles) {
-        const filePath = path.join(commandsPath, file);
+        const filePath = path.join(
+            commandsPath,
+            file
+        );
 
         try {
             const command = require(filePath);
@@ -83,16 +101,25 @@ if (fs.existsSync(commandsPath)) {
                 !command.data ||
                 typeof command.execute !== "function"
             ) {
-                console.log(`⚠️ Comando ignorado: ${file}`);
+                console.log(
+                    `⚠️ Comando ignorado: ${file}`
+                );
+
                 continue;
             }
 
-            client.commands.set(command.data.name, command);
+            client.commands.set(
+                command.data.name,
+                command
+            );
 
-            console.log(`✅ Comando carregado: ${command.data.name}`);
+            console.log(
+                `✅ Comando carregado: ` +
+                `${command.data.name}`
+            );
         } catch (error) {
             console.error(
-                `❌ Erro ao carregar o comando ${file}:`,
+                `❌ Erro ao carregar ${file}:`,
                 error
             );
         }
@@ -101,200 +128,780 @@ if (fs.existsSync(commandsPath)) {
 
 
 // ========================================
-// CARREGAR BOTÕES
+// CARREGAR BOTÕES DO SISTEMA DE TICKETS
 // ========================================
 
-const abrirTicket = require("./buttons/abrirTicket.js");
-const fecharTicket = require("./buttons/fecharTicket.js");
-const atendenteTicket = require("./buttons/atendenteTicket.js");
-const suporte = require("./buttons/suporte.js");
-const denuncia = require("./buttons/denuncia.js");
+const abrirTicket =
+    require("./buttons/abrirTicket.js");
+
+const fecharTicket =
+    require("./buttons/fecharTicket.js");
+
+const atendenteTicket =
+    require("./buttons/atendenteTicket.js");
+
+const suporte =
+    require("./buttons/suporte.js");
+
+const denuncia =
+    require("./buttons/denuncia.js");
+
 
 const botoes = new Map();
 
-botoes.set("abrir_ticket", abrirTicket);
-botoes.set("fechar_ticket", fecharTicket);
-botoes.set("atendente_ticket", atendenteTicket);
-botoes.set("suporte_ticket", suporte);
-botoes.set("denuncia_ticket", denuncia);
+botoes.set(
+    "abrir_ticket",
+    abrirTicket
+);
+
+botoes.set(
+    "fechar_ticket",
+    fecharTicket
+);
+
+botoes.set(
+    "atendente_ticket",
+    atendenteTicket
+);
+
+botoes.set(
+    "suporte_ticket",
+    suporte
+);
+
+botoes.set(
+    "denuncia_ticket",
+    denuncia
+);
+
+
+// ========================================
+// FUNÇÃO PARA CRIAR CAMPOS DOS MODAIS
+// ========================================
+
+function criarCampo({
+    customId,
+    label,
+    valor,
+    estilo = TextInputStyle.Short,
+    obrigatorio = true,
+    tamanhoMaximo = 100
+}) {
+    const campo = new TextInputBuilder()
+        .setCustomId(customId)
+        .setLabel(label)
+        .setStyle(estilo)
+        .setRequired(obrigatorio)
+        .setMaxLength(tamanhoMaximo);
+
+    if (valor) {
+        campo.setValue(
+            String(valor).slice(
+                0,
+                tamanhoMaximo
+            )
+        );
+    }
+
+    return new ActionRowBuilder().addComponents(
+        campo
+    );
+}
+
+
+// ========================================
+// ABRIR MODAL DE CONFIGURAÇÃO
+// ========================================
+
+async function abrirModalConfiguracao(
+    interaction
+) {
+    const config = pegarConfiguracao(
+        interaction.guild.id
+    );
+
+    let modal;
+
+    switch (interaction.customId) {
+        case "config_titulo":
+            modal = new ModalBuilder()
+                .setCustomId("modal_titulo")
+                .setTitle("Alterar título")
+                .addComponents(
+                    criarCampo({
+                        customId: "titulo",
+                        label: "Título do painel",
+                        valor: config.titulo,
+                        tamanhoMaximo: 256
+                    })
+                );
+            break;
+
+
+        case "config_descricao":
+            modal = new ModalBuilder()
+                .setCustomId("modal_descricao")
+                .setTitle("Alterar descrição")
+                .addComponents(
+                    criarCampo({
+                        customId: "descricao",
+                        label: "Descrição do painel",
+                        valor: config.descricao,
+                        estilo:
+                            TextInputStyle.Paragraph,
+                        tamanhoMaximo: 4000
+                    })
+                );
+            break;
+
+
+        case "config_imagem":
+            modal = new ModalBuilder()
+                .setCustomId("modal_imagem")
+                .setTitle("Alterar imagem")
+                .addComponents(
+                    criarCampo({
+                        customId: "imagem",
+                        label:
+                            "Link HTTPS da imagem",
+                        valor: config.imagem,
+                        obrigatorio: false,
+                        tamanhoMaximo: 1000
+                    })
+                );
+            break;
+
+
+        case "config_cor":
+            modal = new ModalBuilder()
+                .setCustomId("modal_cor")
+                .setTitle("Alterar cor")
+                .addComponents(
+                    criarCampo({
+                        customId: "cor",
+                        label:
+                            "Cor hexadecimal",
+                        valor: config.cor,
+                        tamanhoMaximo: 7
+                    })
+                );
+            break;
+
+
+        case "config_textos_botoes":
+            modal = new ModalBuilder()
+                .setCustomId(
+                    "modal_textos_botoes"
+                )
+                .setTitle(
+                    "Nomes dos botões"
+                )
+                .addComponents(
+                    criarCampo({
+                        customId:
+                            "texto_principal",
+
+                        label:
+                            "Botão principal",
+
+                        valor:
+                            config
+                                .botaoPrincipalTexto,
+
+                        tamanhoMaximo: 80
+                    }),
+
+                    criarCampo({
+                        customId:
+                            "texto_suporte",
+
+                        label:
+                            "Botão de suporte",
+
+                        valor:
+                            config
+                                .botaoSuporteTexto,
+
+                        tamanhoMaximo: 80
+                    }),
+
+                    criarCampo({
+                        customId:
+                            "texto_denuncia",
+
+                        label:
+                            "Botão de denúncia",
+
+                        valor:
+                            config
+                                .botaoDenunciaTexto,
+
+                        tamanhoMaximo: 80
+                    })
+                );
+            break;
+
+
+        case "config_emojis_botoes":
+            modal = new ModalBuilder()
+                .setCustomId(
+                    "modal_emojis_botoes"
+                )
+                .setTitle(
+                    "Emojis dos botões"
+                )
+                .addComponents(
+                    criarCampo({
+                        customId:
+                            "emoji_principal",
+
+                        label:
+                            "Emoji principal",
+
+                        valor:
+                            config
+                                .botaoPrincipalEmoji,
+
+                        tamanhoMaximo: 50
+                    }),
+
+                    criarCampo({
+                        customId:
+                            "emoji_suporte",
+
+                        label:
+                            "Emoji de suporte",
+
+                        valor:
+                            config
+                                .botaoSuporteEmoji,
+
+                        tamanhoMaximo: 50
+                    }),
+
+                    criarCampo({
+                        customId:
+                            "emoji_denuncia",
+
+                        label:
+                            "Emoji de denúncia",
+
+                        valor:
+                            config
+                                .botaoDenunciaEmoji,
+
+                        tamanhoMaximo: 50
+                    })
+                );
+            break;
+
+
+        default:
+            return false;
+    }
+
+    await interaction.showModal(modal);
+
+    return true;
+}
+
+
+// ========================================
+// SALVAR MODAL
+// ========================================
+
+async function salvarModalConfiguracao(
+    interaction
+) {
+    const guildId = interaction.guild.id;
+
+    let alteracoes = {};
+
+    switch (interaction.customId) {
+        case "modal_titulo":
+            alteracoes = {
+                titulo:
+                    interaction.fields
+                        .getTextInputValue(
+                            "titulo"
+                        )
+                        .trim()
+            };
+            break;
+
+
+        case "modal_descricao":
+            alteracoes = {
+                descricao:
+                    interaction.fields
+                        .getTextInputValue(
+                            "descricao"
+                        )
+                        .trim()
+            };
+            break;
+
+
+        case "modal_imagem": {
+            const imagem =
+                interaction.fields
+                    .getTextInputValue(
+                        "imagem"
+                    )
+                    .trim();
+
+            if (
+                imagem &&
+                !imagem.startsWith("https://")
+            ) {
+                await interaction.reply({
+                    content:
+                        "❌ O link precisa começar com `https://`.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            alteracoes = {
+                imagem
+            };
+
+            break;
+        }
+
+
+        case "modal_cor": {
+            let cor =
+                interaction.fields
+                    .getTextInputValue("cor")
+                    .trim()
+                    .toUpperCase();
+
+            if (!cor.startsWith("#")) {
+                cor = `#${cor}`;
+            }
+
+            if (
+                !/^#[0-9A-F]{6}$/.test(cor)
+            ) {
+                await interaction.reply({
+                    content:
+                        "❌ Cor inválida. Use algo como `#5865F2`.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            alteracoes = {
+                cor
+            };
+
+            break;
+        }
+
+
+        case "modal_textos_botoes":
+            alteracoes = {
+                botaoPrincipalTexto:
+                    interaction.fields
+                        .getTextInputValue(
+                            "texto_principal"
+                        )
+                        .trim(),
+
+                botaoSuporteTexto:
+                    interaction.fields
+                        .getTextInputValue(
+                            "texto_suporte"
+                        )
+                        .trim(),
+
+                botaoDenunciaTexto:
+                    interaction.fields
+                        .getTextInputValue(
+                            "texto_denuncia"
+                        )
+                        .trim()
+            };
+            break;
+
+
+        case "modal_emojis_botoes":
+            alteracoes = {
+                botaoPrincipalEmoji:
+                    interaction.fields
+                        .getTextInputValue(
+                            "emoji_principal"
+                        )
+                        .trim(),
+
+                botaoSuporteEmoji:
+                    interaction.fields
+                        .getTextInputValue(
+                            "emoji_suporte"
+                        )
+                        .trim(),
+
+                botaoDenunciaEmoji:
+                    interaction.fields
+                        .getTextInputValue(
+                            "emoji_denuncia"
+                        )
+                        .trim()
+            };
+            break;
+
+
+        default:
+            return false;
+    }
+
+    salvarConfiguracao(
+        guildId,
+        alteracoes
+    );
+
+    await interaction.reply({
+        content:
+            "✅ Configuração salva com sucesso.\n" +
+            "Use `/painel` novamente para ver os valores atualizados.",
+
+        flags: MessageFlags.Ephemeral
+    });
+
+    return true;
+}
 
 
 // ========================================
 // BOT CONECTADO
 // ========================================
 
-client.once(Events.ClientReady, readyClient => {
-    console.log(`✅ Bot conectado como ${readyClient.user.tag}`);
+client.once(
+    Events.ClientReady,
+    readyClient => {
+        console.log(
+            `✅ Bot conectado como ` +
+            `${readyClient.user.tag}`
+        );
 
-    console.log(
-        `✅ Bot está em ${readyClient.guilds.cache.size} servidor(es)`
-    );
+        console.log(
+            `✅ Bot está em ` +
+            `${readyClient.guilds.cache.size} ` +
+            `servidor(es)`
+        );
 
-    console.log(
-        `🔨 Canal de banimento configurado: ${CANAL_DE_BANIMENTO}`
-    );
-});
+        console.log(
+            `🔨 Canal de banimento: ` +
+            `${CANAL_DE_BANIMENTO}`
+        );
+    }
+);
 
 
 // ========================================
-// COMANDOS E BOTÕES
+// TODAS AS INTERAÇÕES
 // ========================================
 
-client.on(Events.InteractionCreate, async interaction => {
-    try {
-        // Comandos de barra
-        if (interaction.isChatInputCommand()) {
-            const command = client.commands.get(
-                interaction.commandName
-            );
-
-            if (!command) {
-                console.log(
-                    `⚠️ Comando não encontrado: ${interaction.commandName}`
-                );
-
-                return;
-            }
-
-            console.log(
-                `⌨️ Comando utilizado: /${interaction.commandName}`
-            );
-
-            await command.execute(interaction);
-            return;
-        }
-
-        // Botões
-        if (interaction.isButton()) {
-            console.log(
-                `🔘 Botão clicado: ${interaction.customId}`
-            );
-
-            const botao = botoes.get(interaction.customId);
-
-            if (!botao) {
-                console.log(
-                    `⚠️ Botão não encontrado: ${interaction.customId}`
-                );
-
-                return;
-            }
-
-            if (typeof botao.execute !== "function") {
-                console.log(
-                    `❌ O botão ${interaction.customId} não possui execute()`
-                );
-
-                return;
-            }
-
-            await botao.execute(interaction);
-            return;
-        }
-    } catch (error) {
-        console.error("❌ Erro ao executar interação:", error);
-
+client.on(
+    Events.InteractionCreate,
+    async interaction => {
         try {
-            const resposta = {
-                content: "❌ Ocorreu um erro ao executar esta ação.",
-                flags: MessageFlags.Ephemeral
-            };
 
-            if (interaction.replied || interaction.deferred) {
-                await interaction.followUp(resposta);
-            } else {
-                await interaction.reply(resposta);
+            // =================================
+            // COMANDOS
+            // =================================
+
+            if (
+                interaction.isChatInputCommand()
+            ) {
+                const command =
+                    client.commands.get(
+                        interaction.commandName
+                    );
+
+                if (!command) {
+                    console.log(
+                        `⚠️ Comando não encontrado: ` +
+                        interaction.commandName
+                    );
+
+                    return;
+                }
+
+                await command.execute(
+                    interaction
+                );
+
+                return;
             }
-        } catch (responseError) {
+
+
+            // =================================
+            // MODAIS
+            // =================================
+
+            if (
+                interaction.isModalSubmit()
+            ) {
+                const tratado =
+                    await salvarModalConfiguracao(
+                        interaction
+                    );
+
+                if (tratado) return;
+            }
+
+
+            // =================================
+            // BOTÕES
+            // =================================
+
+            if (interaction.isButton()) {
+
+                // Botões que abrem modais
+                if (
+                    interaction.customId
+                        .startsWith("config_") &&
+                    interaction.customId !==
+                        "config_visualizar" &&
+                    interaction.customId !==
+                        "config_enviar"
+                ) {
+                    const abriu =
+                        await abrirModalConfiguracao(
+                            interaction
+                        );
+
+                    if (abriu) return;
+                }
+
+
+                // Visualizar o painel
+                if (
+                    interaction.customId ===
+                    "config_visualizar"
+                ) {
+                    const config =
+                        pegarConfiguracao(
+                            interaction.guild.id
+                        );
+
+                    await interaction.reply({
+                        content:
+                            "👁️ Esta é a visualização do seu painel:",
+
+                        embeds: [
+                            criarEmbedTicket(
+                                config
+                            )
+                        ],
+
+                        components: [
+                            criarBotaoPrincipal(
+                                config
+                            )
+                        ],
+
+                        flags:
+                            MessageFlags.Ephemeral
+                    });
+
+                    return;
+                }
+
+
+                // Publicar o painel
+                if (
+                    interaction.customId ===
+                    "config_enviar"
+                ) {
+                    const config =
+                        pegarConfiguracao(
+                            interaction.guild.id
+                        );
+
+                    await interaction.channel.send({
+                        embeds: [
+                            criarEmbedTicket(
+                                config
+                            )
+                        ],
+
+                        components: [
+                            criarBotaoPrincipal(
+                                config
+                            )
+                        ]
+                    });
+
+                    await interaction.reply({
+                        content:
+                            "✅ Painel publicado neste canal.",
+
+                        flags:
+                            MessageFlags.Ephemeral
+                    });
+
+                    return;
+                }
+
+
+                // Botões normais dos tickets
+                const botao = botoes.get(
+                    interaction.customId
+                );
+
+                if (!botao) {
+                    console.log(
+                        `⚠️ Botão não encontrado: ` +
+                        interaction.customId
+                    );
+
+                    return;
+                }
+
+                await botao.execute(
+                    interaction
+                );
+
+                return;
+            }
+
+        } catch (error) {
             console.error(
-                "❌ Não foi possível enviar a mensagem de erro:",
-                responseError
+                "❌ Erro ao executar interação:",
+                error
+            );
+
+            try {
+                const resposta = {
+                    content:
+                        "❌ Ocorreu um erro ao executar esta ação.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                };
+
+                if (
+                    interaction.replied ||
+                    interaction.deferred
+                ) {
+                    await interaction.followUp(
+                        resposta
+                    );
+                } else {
+                    await interaction.reply(
+                        resposta
+                    );
+                }
+            } catch (responseError) {
+                console.error(
+                    "❌ Não foi possível responder:",
+                    responseError
+                );
+            }
+        }
+    }
+);
+
+
+// ========================================
+// BAN AUTOMÁTICO
+// ========================================
+
+client.on(
+    Events.MessageCreate,
+    async message => {
+        try {
+            if (!message.guild) return;
+            if (message.author.bot) return;
+
+            if (
+                message.channel.id !==
+                CANAL_DE_BANIMENTO
+            ) {
+                return;
+            }
+
+            const membro = message.member;
+
+            if (!membro) return;
+
+            if (
+                message.guild.ownerId ===
+                membro.id
+            ) {
+                console.log(
+                    "⚠️ O dono do servidor " +
+                    "não pode ser banido."
+                );
+
+                return;
+            }
+
+            if (!membro.bannable) {
+                console.log(
+                    `❌ Não consigo banir ` +
+                    `${membro.user.tag}.`
+                );
+
+                return;
+            }
+
+            const motivo =
+                "Enviou uma mensagem no " +
+                `canal proibido #${message.channel.name}.`;
+
+            await membro.ban({
+                reason: motivo,
+                deleteMessageSeconds:
+                    60 * 60
+            });
+
+            console.log(
+                `🔨 Usuário banido: ` +
+                `${membro.user.tag}`
+            );
+        } catch (error) {
+            console.error(
+                "❌ Erro ao banir usuário:",
+                error
             );
         }
     }
-});
+);
 
 
 // ========================================
-// BAN AUTOMÁTICO POR MENSAGEM
+// ERROS GERAIS
 // ========================================
 
-client.on(Events.MessageCreate, async message => {
-    try {
-        // Ignora mensagens enviadas no privado.
-        if (!message.guild) return;
-
-        // Ignora mensagens enviadas por bots.
-        if (message.author.bot) return;
-
-        // Ignora mensagens enviadas em outros canais.
-        if (message.channel.id !== CANAL_DE_BANIMENTO) return;
-
-        const membro = message.member;
-
-        if (!membro) {
-            console.log(
-                `⚠️ Não foi possível encontrar o membro ${message.author.tag}`
-            );
-
-            return;
-        }
-
-        // O dono do servidor não pode ser banido.
-        if (message.guild.ownerId === membro.id) {
-            console.log(
-                `⚠️ O dono do servidor escreveu no canal: ${membro.user.tag}`
-            );
-
-            return;
-        }
-
-        // Verifica se o Discord permite que o bot bana esse membro.
-        if (!membro.bannable) {
-            console.log(
-                `❌ Não consigo banir ${membro.user.tag}. ` +
-                "O cargo da pessoa pode estar acima do cargo do bot."
-            );
-
-            return;
-        }
-
-        const motivo =
-            `Enviou uma mensagem no canal proibido ` +
-            `#${message.channel.name}.`;
-
-        await membro.ban({
-            reason: motivo,
-            deleteMessageSeconds: 60 * 60
-        });
-
-        console.log(
-            `🔨 Usuário banido: ${membro.user.tag}`
-        );
-
-        console.log(
-            `📄 Motivo: ${motivo}`
-        );
-    } catch (error) {
+process.on(
+    "unhandledRejection",
+    error => {
         console.error(
-            "❌ Erro ao tentar banir o usuário:",
+            "❌ Erro não tratado:",
             error
         );
     }
-});
+);
 
-
-// ========================================
-// TRATAMENTO DE ERROS
-// ========================================
-
-process.on("unhandledRejection", error => {
-    console.error("❌ Erro não tratado:", error);
-});
-
-process.on("uncaughtException", error => {
-    console.error("❌ Exceção não tratada:", error);
-});
+process.on(
+    "uncaughtException",
+    error => {
+        console.error(
+            "❌ Exceção não tratada:",
+            error
+        );
+    }
+);
 
 
 // ========================================
@@ -302,16 +909,8 @@ process.on("uncaughtException", error => {
 // ========================================
 
 if (!process.env.TOKEN) {
-    console.error("❌ A variável TOKEN não foi configurada.");
-    process.exit(1);
-}
-
-if (
-    !CANAL_DE_BANIMENTO ||
-    CANAL_DE_BANIMENTO === "COLE_O_ID_DO_CANAL_AQUI"
-) {
     console.error(
-        "❌ Você ainda não colocou o ID do canal de banimento."
+        "❌ A variável TOKEN não foi configurada."
     );
 
     process.exit(1);
