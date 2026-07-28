@@ -17,7 +17,7 @@ const {
 // Exemplo:
 // const CARGO_BLOQUEADO_ID = "123456789012345678";
 
-const CARGO_BLOQUEADO_ID = "1531432066783248434";
+const CARGO_BLOQUEADO_ID = "";
 
 
 module.exports = {
